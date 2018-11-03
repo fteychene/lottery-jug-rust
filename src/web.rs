@@ -9,8 +9,10 @@ use database::{CreateWinner, DbExecutor};
 
 #[derive(Clone)]
 pub struct WebState {
-    pub cache: Addr<LotteryCache>,
-    pub db: Addr<DbExecutor>,
+//    pub cache: Addr<LotteryCache>,
+//    pub db: Addr<DbExecutor>,
+    pub organizer: String,
+    pub token: String,
 }
 
 impl error::ResponseError for LotteryError {
@@ -30,7 +32,21 @@ struct WinnerQuery {
 }
 
 fn winner_handler((state, query): (State<WebState>, Query<WinnerQuery>)) -> FutureResponse<HttpResponse, LotteryError> {
-    unimplemented!()
+    use eventbrite;
+    use lottery;
+    match query.nb {
+        a if a < 0 => Box::new(future::err(LotteryError::InvalidParameter)),
+        nb => {
+            let result = eventbrite::get_current_event(&state.organizer, &state.token)
+                .and_then(|event| eventbrite::load_attendees(&event.id, &state.token))
+                .map_err(|err| LotteryError::UnexpectedError { cause: err })
+                .and_then(|attendees| lottery::draw(nb, &attendees)
+                    .map(|profiles| profiles.into_iter().map(|r| r.clone()).collect::<Vec<eventbrite::Profile>>())
+                    .map_err(|error| LotteryError::DrawError { cause: error }))
+                .map(|res| HttpResponse::Ok().json(res));
+            Box::new(future::result(result))
+        }
+    }
 }
 
 /// Async request handler
@@ -40,6 +56,12 @@ fn record_winner_handler(
     unimplemented!()
 }
 
-pub fn http_server(state: WebState, http_bind: String, http_port: String){
-    unimplemented!()
+pub fn http_server(state: WebState, http_bind: String, http_port: String) {
+    HttpServer::new(move ||
+        App::with_state(state.clone())
+            .middleware(middleware::Logger::default())
+            .resource("/winners", |r| r.method(http::Method::GET).with(winner_handler)))
+        .bind(format!("{}:{}", http_bind, http_port))
+        .unwrap()
+        .start();
 }

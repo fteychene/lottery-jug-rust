@@ -64,8 +64,13 @@ pub enum LotteryError {
 fn main() {
     let organizer = env::var("ORGANIZER_TOKEN").expect("ORGANIZER_TOKEN is mandatory");
     let token = env::var("EVENTBRITE_TOKEN").expect("EVENTBRITE_TOKEN is mandatory");
-    match eventbrite::get_current_event(&organizer, &token) {
-        Ok(event) => println!("Hey jai trouvé un event {}", event.id),
-        Err(err) => eprintln!("Error : {}", err)
-    }
+    let http_bind = env::var("HTTP_BIND").unwrap_or("0.0.0.0".to_string());
+    let http_port = env::var("HTTP_PORT").unwrap_or("8088".to_string());
+
+    let system = System::new("lottery");
+
+    web::http_server(WebState{organizer: organizer, token: token}, http_bind, http_port);
+
+    system.run();
+
 }
