@@ -46,6 +46,7 @@ use std::env;
 use actix::{System, Arbiter};
 use web::WebState;
 
+
 #[derive(Fail, Debug)]
 pub enum LotteryError {
     #[fail(display = "Invalid parameter")]
@@ -59,21 +60,5 @@ pub enum LotteryError {
 }
 
 fn main() {
-    env_logger::init();
-    let organizer = env::var("ORGANIZER_TOKEN").expect("ORGANIZER_TOKEN is mandatory");
-    let token = env::var("EVENTBRITE_TOKEN").expect("EVENTBRITE_TOKEN is mandatory");
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL env var is mandatory");
-    let http_bind = env::var("HTTP_BIND").unwrap_or("0.0.0.0".to_string());
-    let http_port = env::var("HTTP_PORT").unwrap_or("8088".to_string());
-
-    info!("Starting lottery ! ");
-    let system = System::new("lottery");
-
-    let db_addr = database::start_database(database_url);
-    let cache_addr = lotterycache::start_cache();
-    Arbiter::spawn(cache_loop::cache_update_interval(10, cache_addr.clone(), token.clone(), organizer.clone()));
-
-    web::http_server(WebState { cache: cache_addr.clone(), db: db_addr.clone() }, http_bind, http_port);
-
-    system.run();
+    println!("Hello world !");
 }

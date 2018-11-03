@@ -10,10 +10,10 @@ pub enum EventbriteError {
     #[fail(display = "error while loading attendees for event {}", event_id)]
     AttendeesLoadError {
         event_id: String,
-        #[cause] cause: Error
+        #[cause] cause: Error,
     },
     #[fail(display = "No event available on eventbrite")]
-    NoEventAvailable
+    NoEventAvailable,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -21,13 +21,13 @@ pub struct Pagination {
     pub object_count: u8,
     pub page_count: u8,
     pub page_size: u8,
-    pub page_number: u8
+    pub page_number: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Profile {
     pub first_name: String,
-    pub last_name: String
+    pub last_name: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -38,7 +38,7 @@ pub struct Attende {
 #[derive(Deserialize, Debug, Clone)]
 pub struct AttendeesResponse {
     pub attendees: Vec<Attende>,
-    pub pagination: Pagination
+    pub pagination: Pagination,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -57,16 +57,11 @@ fn events_url(organizer: &str, token: &str) -> String {
 }
 
 fn load_events(organizer: &str, token: &str) -> Result<EventsResponse, Error> {
-    let events = reqwest::get(&events_url(organizer, token))?
-        .error_for_status()?
-        .json()?;
-    Ok(events)
+    unimplemented!()
 }
 
 fn first_event(events: EventsResponse) -> Result<Event, Error> {
-    events.events.first()
-        .map(|reference| reference.clone())
-        .ok_or(EventbriteError::NoEventAvailable.into())
+    unimplemented!()
 }
 
 fn fetch_first_event<F: Fn(&str, &str) -> Result<EventsResponse, Error>>(fetch: F, organizer: &str, token: &str) -> Result<Event, Error> {
@@ -82,24 +77,11 @@ fn attendees_url(event_id: &str, token: &str, page_id: u8) -> String {
 }
 
 fn fetch_attendees_page(event_id: &str, token: &str, page: u8) -> Result<AttendeesResponse, Error> {
-    let attendees = reqwest::get(&attendees_url(event_id, token, page))?
-        .error_for_status()?
-        .json()?;
-    Ok(attendees)
+    unimplemented!()
 }
 
 fn fetch_all_attendees<F: Fn(&str, &str, u8) -> Result<AttendeesResponse, Error>>(fetch: F, event_id: &str, token: &str) -> Result<Vec<Profile>, Error> {
-    fetch(event_id, token, 0)
-        .and_then(|result: AttendeesResponse| {
-            let range = Range { start: result.pagination.page_number, end: result.pagination.page_count };
-            sequence(range.fold(vec![Ok(result)], |mut result, page| {
-                result.push(fetch(event_id, token, page + 1));
-                result
-            }))
-        })
-        .map(|results: Vec<AttendeesResponse>| results.into_iter().map(|response| response.attendees.into_iter().map(|attendee| attendee.profile).collect()).collect())
-        .map(|results: Vec<Vec<Profile>>| combine_all(&results))
-        .map_err(|err| EventbriteError::AttendeesLoadError { event_id: String::from(event_id), cause: err }.into())
+    unimplemented!()
 }
 
 pub fn load_attendees(event_id: &str, token: &str) -> Result<Vec<Profile>, Error> {
@@ -143,20 +125,20 @@ mod tests {
 
     #[test]
     fn test_first_event() {
-        let response = EventsResponse{ events: vec![Event{id: "51124390428".to_string()}]};
+        let response = EventsResponse { events: vec![Event { id: "51124390428".to_string() }] };
         let actual = first_event(response);
         assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), Event{id: "51124390428".to_string()});
+        assert_eq!(actual.unwrap(), Event { id: "51124390428".to_string() });
 
-        let response = EventsResponse{ events: vec![]};
+        let response = EventsResponse { events: vec![] };
         let actual = first_event(response);
         assert!(actual.is_err());
         matches!(actual.unwrap_err().downcast::<EventbriteError>(), Ok(EventbriteError::NoEventAvailable));
 
-        let response = EventsResponse{ events: vec![Event{id: "51124390432".to_string()}, Event{id: "51124390428".to_string()}]};
+        let response = EventsResponse { events: vec![Event { id: "51124390432".to_string() }, Event { id: "51124390428".to_string() }] };
         let actual = first_event(response);
         assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), Event{id: "51124390432".to_string()});
+        assert_eq!(actual.unwrap(), Event { id: "51124390432".to_string() });
     }
 
     #[test]
@@ -165,14 +147,14 @@ mod tests {
         use std::io::ErrorKind;
 
         let fetch = |_organizer: &str, _token: &str| {
-            Ok(EventsResponse{events: vec![Event{id: "51124390428".to_string()}]})
+            Ok(EventsResponse { events: vec![Event { id: "51124390428".to_string() }] })
         };
         let actual = fetch_first_event(fetch, "412451CDS", "5O5ICDI5I4LUFCAZRSTX");
         assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), Event{id: "51124390428".to_string()});
+        assert_eq!(actual.unwrap(), Event { id: "51124390428".to_string() });
 
         let fetch = |_organizer: &str, _token: &str| {
-            Ok(EventsResponse{events: vec![]})
+            Ok(EventsResponse { events: vec![] })
         };
         let actual = fetch_first_event(fetch, "412451CDS", "5O5ICDI5I4LUFCAZRSTX");
         assert!(actual.is_err());
@@ -186,11 +168,11 @@ mod tests {
         matches!(actual.unwrap_err().downcast::<Error>(), Ok(ref e) if e.kind() == ErrorKind::ConnectionRefused);
 
         let fetch = |_organizer: &str, _token: &str| {
-            Ok(EventsResponse{events: vec![Event{id: "51124390432".to_string()}, Event{id: "51124390428".to_string()}]})
+            Ok(EventsResponse { events: vec![Event { id: "51124390432".to_string() }, Event { id: "51124390428".to_string() }] })
         };
         let actual = fetch_first_event(fetch, "412451CDS", "5O5ICDI5I4LUFCAZRSTX");
         assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), Event{id: "51124390432".to_string()});
+        assert_eq!(actual.unwrap(), Event { id: "51124390432".to_string() });
     }
 
     #[test]
@@ -246,7 +228,7 @@ mod tests {
         assert!(result.is_err());
         let typed_error = result.unwrap_err().downcast::<EventbriteError>().unwrap();
         match typed_error {
-            EventbriteError::AttendeesLoadError{event_id: _, cause} => assert_eq!(cause.downcast::<Error>().unwrap().kind(), ErrorKind::ConnectionRefused),
+            EventbriteError::AttendeesLoadError { event_id: _, cause } => assert_eq!(cause.downcast::<Error>().unwrap().kind(), ErrorKind::ConnectionRefused),
             _ => assert!(false)
         }
 
@@ -270,7 +252,7 @@ mod tests {
         assert!(result.is_err());
         let typed_error = result.unwrap_err().downcast::<EventbriteError>().unwrap();
         match typed_error {
-            EventbriteError::AttendeesLoadError{event_id: _, cause} => assert_eq!(cause.downcast::<Error>().unwrap().kind(), ErrorKind::ConnectionRefused),
+            EventbriteError::AttendeesLoadError { event_id: _, cause } => assert_eq!(cause.downcast::<Error>().unwrap().kind(), ErrorKind::ConnectionRefused),
             _ => assert!(false)
         }
     }

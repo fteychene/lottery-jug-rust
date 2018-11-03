@@ -30,41 +30,16 @@ struct WinnerQuery {
 }
 
 fn winner_handler((state, query): (State<WebState>, Query<WinnerQuery>)) -> FutureResponse<HttpResponse, LotteryError> {
-    match query.nb {
-        nb if nb < 0 => Box::new(future::err(LotteryError::InvalidParameter)),
-        _ => state.cache.send(GetAttendees { nb: query.nb })
-            .map_err(|error| LotteryError::UnexpectedError { cause: error.into() })
-            .and_then(|result| result)
-            .and_then(|res| Ok(HttpResponse::Ok().json(res)))
-            .responder()
-    }
+    unimplemented!()
 }
 
 /// Async request handler
 fn record_winner_handler(
     (winner, state): (Json<CreateWinner>, State<WebState>),
 ) -> FutureResponse<HttpResponse> {
-    state.cache.send(GetEvent{})
-        .and_then(move |event| {
-            let mut  winner = winner.into_inner();
-            winner.event_id = event.map(|event| event.id).ok();
-            state.db.send(winner)
-        })
-        .from_err()
-        .and_then(|res| match res {
-            Ok(user) => Ok(HttpResponse::Ok().json(user)),
-            Err(_) => Ok(HttpResponse::InternalServerError().into()),
-        })
-        .responder()
+    unimplemented!()
 }
 
 pub fn http_server(state: WebState, http_bind: String, http_port: String){
-    HttpServer::new(move ||
-        App::with_state(state.clone())
-            .middleware(middleware::Logger::default())
-            .resource("/winners", |r| r.method(http::Method::GET).with(winner_handler))
-            .resource("/record", |r| r.method(http::Method::POST).with(record_winner_handler)))
-        .bind(format!("{}:{}", http_bind, http_port))
-        .unwrap()
-        .start();
+    unimplemented!()
 }

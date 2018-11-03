@@ -11,7 +11,7 @@ failure_derive = "0.1.2"
 serde = "1.0"
 serde_derive = "1.0"
 # Http client
-reqwest = "0.8.1"
+reqwest = "0.9.5"
 # Utils
 frunk = "0.2.1"
 rand = "0.5.5"
