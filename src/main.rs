@@ -65,16 +65,18 @@ pub enum LotteryError {
 fn main() {
     let organizer = env::var("ORGANIZER_TOKEN").expect("ORGANIZER_TOKEN is mandatory");
     let token = env::var("EVENTBRITE_TOKEN").expect("EVENTBRITE_TOKEN is mandatory");
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL env var is mandatory");
     let http_bind = env::var("HTTP_BIND").unwrap_or("0.0.0.0".to_string());
     let http_port = env::var("HTTP_PORT").unwrap_or("8088".to_string());
 
     let system = System::new("lottery");
 
+    let db_addr = database::start_database(database_url);
     let cache_addr = lotterycache::start_cache();
 
     Arbiter::spawn(cache_loop::cache_update_interval(10, cache_addr.clone(), token, organizer));
 
-    web::http_server(WebState{cache: cache_addr.clone()}, http_bind, http_port);
+    web::http_server(WebState{cache: cache_addr, db: db_addr}, http_bind, http_port);
 
     system.run();
 

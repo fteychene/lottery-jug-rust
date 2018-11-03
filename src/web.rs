@@ -10,7 +10,7 @@ use database::{CreateWinner, DbExecutor};
 #[derive(Clone)]
 pub struct WebState {
     pub cache: Addr<LotteryCache>,
-//    pub db: Addr<DbExecutor>,
+    pub db: Addr<DbExecutor>,
 }
 
 impl error::ResponseError for LotteryError {
@@ -44,7 +44,18 @@ fn winner_handler((state, query): (State<WebState>, Query<WinnerQuery>)) -> Futu
 fn record_winner_handler(
     (winner, state): (Json<CreateWinner>, State<WebState>),
 ) -> FutureResponse<HttpResponse> {
-    unimplemented!()
+    state.cache.send(GetEvent {})
+        .and_then(move |event| {
+            let mut winner = winner.into_inner();
+            winner.event_id = event.map(|event| event.id).ok();
+            state.db.send(winner)
+        })
+        .from_err()
+        .and_then(|res| match res {
+            Ok(user) => Ok(HttpResponse::Ok().json(user)),
+            Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        })
+        .responder()
 }
 
 pub fn http_server(state: WebState, http_bind: String, http_port: String) {

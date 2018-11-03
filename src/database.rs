@@ -34,7 +34,27 @@ impl Handler<CreateWinner> for DbExecutor {
 
     fn handle(&mut self, msg: CreateWinner, _: &mut Self::Context) -> Self::Result {
         use schema::winners::dsl::*;
-        unimplemented!()
+        let uuid = format!("{}", uuid::Uuid::new_v4());
+        let new_user = NewWinner {
+            id: &uuid,
+            first_name: &msg.first_name,
+            last_name: &msg.last_name,
+            event_id: &msg.event_id.unwrap_or("Unknown".to_owned()),
+        };
+
+        let conn: &SqliteConnection = &self.0.get().unwrap();
+
+        diesel::insert_into(winners)
+            .values(&new_user)
+            .execute(conn)
+            .map_err(|err| { LotteryError::UnexpectedError { cause: err.into() } })?;
+
+        let mut items = winners
+            .filter(id.eq(&uuid))
+            .load::<Winner>(conn)
+            .map_err(|err| { LotteryError::UnexpectedError { cause: err.into() } })?;
+
+        Ok(items.pop().unwrap())
     }
 }
 
@@ -58,3 +78,11 @@ pub struct NewWinner<'a> {
 
 embed_migrations!("migrations");
 
+pub fn start_database(database_url: String) -> Addr<DbExecutor> {
+    let manager = ConnectionManager::<SqliteConnection>::new(database_url);
+    let pool = diesel::r2d2::Pool::builder()
+        .build(manager)
+        .expect("Failed to create pool.");
+
+    SyncArbiter::start(3, move || DbExecutor(pool.clone()))
+}
