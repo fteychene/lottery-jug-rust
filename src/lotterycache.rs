@@ -64,7 +64,25 @@ impl Handler<UpdateAttendees> for LotteryCache {
     type Result = UpdateAttendeesResponse;
 
     fn handle(&mut self, msg: UpdateAttendees, _ctx: &mut Context<Self>) -> Self::Result {
-        unimplemented!()
+        let load_attendees = get_current_event(&msg.organizer, &msg.token)
+            .and_then(|event| load_attendees(&event.id, &msg.token).map(|attendees| (event, attendees)));
+        match load_attendees {
+            Ok((event, attendees)) => {
+                self.attendees = Some(attendees);
+                self.event = Some(event);
+                UpdateAttendeesResponse::Updated
+            }
+            Err(e) => {
+                self.attendees = None;
+                match e.downcast::<EventbriteError>() {
+                    Ok(error) => match error {
+                        EventbriteError::NoEventAvailable => UpdateAttendeesResponse::NoEventAvailable,
+                        other_eventbrite_error => UpdateAttendeesResponse::EventbriteError { error: other_eventbrite_error }
+                    },
+                    Err(error) => UpdateAttendeesResponse::UnexpectedError { error: error }
+                }
+            }
+        }
     }
 }
 
@@ -76,7 +94,10 @@ impl Handler<GetAttendees> for LotteryCache {
     type Result = Result<Vec<Profile>, LotteryError>;
 
     fn handle(&mut self, msg: GetAttendees, _ctx: &mut Context<Self>) -> Self::Result {
-        unimplemented!()
+        self.attendees.as_ref()
+            .ok_or(LotteryError::NoEventAvailable)
+            .and_then(|attendees| draw(msg.nb, attendees).map_err(|error| LotteryError::DrawError { cause: error }))
+            .map(|attendees| attendees.into_iter().map(|r| r.clone()).collect())
     }
 }
 

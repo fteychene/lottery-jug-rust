@@ -9,10 +9,8 @@ use database::{CreateWinner, DbExecutor};
 
 #[derive(Clone)]
 pub struct WebState {
-//    pub cache: Addr<LotteryCache>,
+    pub cache: Addr<LotteryCache>,
 //    pub db: Addr<DbExecutor>,
-    pub organizer: String,
-    pub token: String,
 }
 
 impl error::ResponseError for LotteryError {
@@ -32,20 +30,13 @@ struct WinnerQuery {
 }
 
 fn winner_handler((state, query): (State<WebState>, Query<WinnerQuery>)) -> FutureResponse<HttpResponse, LotteryError> {
-    use eventbrite;
-    use lottery;
     match query.nb {
-        a if a < 0 => Box::new(future::err(LotteryError::InvalidParameter)),
-        nb => {
-            let result = eventbrite::get_current_event(&state.organizer, &state.token)
-                .and_then(|event| eventbrite::load_attendees(&event.id, &state.token))
-                .map_err(|err| LotteryError::UnexpectedError { cause: err })
-                .and_then(|attendees| lottery::draw(nb, &attendees)
-                    .map(|profiles| profiles.into_iter().map(|r| r.clone()).collect::<Vec<eventbrite::Profile>>())
-                    .map_err(|error| LotteryError::DrawError { cause: error }))
-                .map(|res| HttpResponse::Ok().json(res));
-            Box::new(future::result(result))
-        }
+        nb if nb < 0 => Box::new(future::err(LotteryError::InvalidParameter)),
+        _ => state.cache.send(GetAttendees { nb: query.nb })
+            .map_err(|error| LotteryError::UnexpectedError { cause: error.into() })
+            .and_then(|result| result)
+            .and_then(|res| Ok(HttpResponse::Ok().json(res)))
+            .responder()
     }
 }
 

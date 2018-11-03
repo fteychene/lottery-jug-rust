@@ -45,7 +45,8 @@ mod basics;
 
 use failure::Error;
 use std::env;
-use actix::{System, Arbiter};
+use actix::{System, Arbiter, Addr};
+use tokio::prelude::Future;
 use web::WebState;
 
 
@@ -69,7 +70,23 @@ fn main() {
 
     let system = System::new("lottery");
 
-    web::http_server(WebState{organizer: organizer, token: token}, http_bind, http_port);
+    let cache_addr = lotterycache::start_cache();
+
+    let clone_cache_addr = cache_addr.clone();
+    Arbiter::spawn_fn(move || {
+        clone_cache_addr.send(lotterycache::UpdateAttendees { organizer: organizer, token: token })
+            .map(|res| {
+                match res {
+                    lotterycache::UpdateAttendeesResponse::NoEventAvailable => println!("No event"),
+                    lotterycache::UpdateAttendeesResponse::Updated => println!("Attendees cache updates"),
+                    lotterycache::UpdateAttendeesResponse::EventbriteError { error: err } => eprintln!("Error calling eventbrite {}", err),
+                    lotterycache::UpdateAttendeesResponse::UnexpectedError { error: err } => eprintln!("Unexpected error {:?}", err)
+                };
+            })
+            .map_err(|err| eprintln!("Error on sending UpdateAttendees message to cache actor"))
+    });
+
+    web::http_server(WebState{cache: cache_addr.clone()}, http_bind, http_port);
 
     system.run();
 
