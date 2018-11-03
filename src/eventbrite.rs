@@ -57,11 +57,16 @@ fn events_url(organizer: &str, token: &str) -> String {
 }
 
 fn load_events(organizer: &str, token: &str) -> Result<EventsResponse, Error> {
-    unimplemented!()
+    let events = reqwest::get(&events_url(organizer, token))?
+        .error_for_status()?
+        .json()?;
+    Ok(events)
 }
 
 fn first_event(events: EventsResponse) -> Result<Event, Error> {
-    unimplemented!()
+    events.events.first()
+            .map(|reference| reference.clone())
+            .ok_or(EventbriteError::NoEventAvailable.into())
 }
 
 fn fetch_first_event<F: Fn(&str, &str) -> Result<EventsResponse, Error>>(fetch: F, organizer: &str, token: &str) -> Result<Event, Error> {
@@ -77,11 +82,24 @@ fn attendees_url(event_id: &str, token: &str, page_id: u8) -> String {
 }
 
 fn fetch_attendees_page(event_id: &str, token: &str, page: u8) -> Result<AttendeesResponse, Error> {
-    unimplemented!()
+    let attendees = reqwest::get(&attendees_url(event_id, token, page))?
+            .error_for_status()?
+            .json()?;
+        Ok(attendees)
 }
 
 fn fetch_all_attendees<F: Fn(&str, &str, u8) -> Result<AttendeesResponse, Error>>(fetch: F, event_id: &str, token: &str) -> Result<Vec<Profile>, Error> {
-    unimplemented!()
+    fetch(event_id, token, 0)
+            .and_then(|result: AttendeesResponse| {
+                let range = Range { start: result.pagination.page_number, end: result.pagination.page_count };
+                sequence(range.fold(vec![Ok(result)], |mut result, page| {
+                    result.push(fetch(event_id, token, page + 1));
+                    result
+                }))
+            })
+            .map(|results: Vec<AttendeesResponse>| results.into_iter().map(|response| response.attendees.into_iter().map(|attendee| attendee.profile).collect()).collect())
+            .map(|results: Vec<Vec<Profile>>| combine_all(&results))
+            .map_err(|err| EventbriteError::AttendeesLoadError { event_id: String::from(event_id), cause: err }.into())
 }
 
 pub fn load_attendees(event_id: &str, token: &str) -> Result<Vec<Profile>, Error> {

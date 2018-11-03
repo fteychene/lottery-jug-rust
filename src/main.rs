@@ -30,7 +30,8 @@ extern crate diesel_migrations;
 extern crate uuid;
 extern crate r2d2;
 
-#[cfg(test)] #[macro_use]
+#[cfg(test)]
+#[macro_use]
 extern crate matches;
 
 mod eventbrite;
@@ -61,5 +62,10 @@ pub enum LotteryError {
 }
 
 fn main() {
-    println!("Hello world !");
+    let organizer = env::var("ORGANIZER_TOKEN").expect("ORGANIZER_TOKEN is mandatory");
+    let token = env::var("EVENTBRITE_TOKEN").expect("EVENTBRITE_TOKEN is mandatory");
+    match eventbrite::get_current_event(&organizer, &token) {
+        Ok(event) => println!("Hey jai trouvé un event {}", event.id),
+        Err(err) => eprintln!("Error : {}", err)
+    }
 }
