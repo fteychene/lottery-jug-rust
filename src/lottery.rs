@@ -16,7 +16,15 @@ enum DrawError {
 }
 
 pub fn draw(nb: i8, attendees: &Vec<Profile>) -> Result<Vec<&Profile>, Error> {
-    unimplemented!()
+    match nb {
+        a if a < 0 => Err(DrawError::InvalidDrawRequest { asked: a }.into()),
+        0 => Ok(vec![]),
+        _ => {
+            let mut rng = thread_rng();
+            seq::sample_iter(&mut rng, attendees, nb as usize)
+                .map_err(|_| DrawError::NotEnoughtParticipant { asked: nb, existant: attendees.len() }.into())
+        }
+    }
 }
 
 #[cfg(test)]
