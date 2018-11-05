@@ -59,10 +59,22 @@ fn record_winner_handler(
 }
 
 pub fn http_server(state: WebState, http_bind: String, http_port: String) {
+    use actix_web::middleware::cors::Cors;
     HttpServer::new(move ||
         App::with_state(state.clone())
             .middleware(middleware::Logger::default())
-            .resource("/winners", |r| r.method(http::Method::GET).with(winner_handler)))
+            .configure(|app| Cors::for_app(app) // <- Construct CORS middleware builder
+                .allowed_origin("https://jug-montpellier.github.io/pre-lottery/")
+                .allowed_origin("http://localhost/")
+                .allowed_origin("http://localhost:3000/")
+                .allowed_origin("http://localhost:8080/")
+                .allowed_methods(vec!["GET", "POST", "OPTION"])
+                .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
+                .allowed_header(http::header::CONTENT_TYPE)
+                .max_age(3600)
+                .resource("/winners", |r| r.method(http::Method::GET).with(winner_handler))
+                .resource("/record", |r| r.method(http::Method::POST).with(record_winner_handler))
+                .register()))
         .bind(format!("{}:{}", http_bind, http_port))
         .unwrap()
         .start();
