@@ -40,6 +40,7 @@ mod lotterycache;
 mod cache_loop;
 mod schema;
 mod database;
+mod basics;
 
 use failure::Error;
 use std::env;
