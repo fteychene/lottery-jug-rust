@@ -8,7 +8,6 @@ extern crate failure_derive;
 extern crate serde_derive;
 extern crate serde;
 extern crate reqwest;
-extern crate frunk;
 extern crate rand;
 extern crate core;
 
