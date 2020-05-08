@@ -1,7 +1,5 @@
 use failure::Error;
 use reqwest;
-use std::ops::Range;
-use frunk::monoid::combine_all;
 
 const EVENTBRITE_BASE_URL: &'static str = "https://www.eventbriteapi.com";
 
@@ -88,42 +86,39 @@ fn fetch_attendees_page(event_id: &str, token: &str, page: u8) -> Result<Attende
         Ok(attendees)
 }
 
-fn fetch_all_attendees<F: Fn(&str, &str, u8) -> Result<AttendeesResponse, Error>>(fetch: F, event_id: &str, token: &str) -> Result<Vec<Profile>, Error> {
+fn fetch_all_attendees<F: Fn(&str, &str, u8) -> Result<AttendeesResponse, Error>>(
+    fetch: F,
+    event_id: &str,
+    token: &str,
+) -> Result<Vec<Profile>, Error> {
     fetch(event_id, token, 0)
-            .and_then(|result: AttendeesResponse| {
-                let range = Range { start: result.pagination.page_number, end: result.pagination.page_count };
-                sequence(range.fold(vec![Ok(result)], |mut result, page| {
+        .and_then(|result| {
+            (result.pagination.page_number..result.pagination.page_count)
+                .fold(vec![Ok(result)], |mut result, page| {
                     result.push(fetch(event_id, token, page + 1));
                     result
-                }))
-            })
-            .map(|results: Vec<AttendeesResponse>| results.into_iter().map(|response| response.attendees.into_iter().map(|attendee| attendee.profile).collect()).collect())
-            .map(|results: Vec<Vec<Profile>>| combine_all(&results))
-            .map_err(|err| EventbriteError::AttendeesLoadError { event_id: String::from(event_id), cause: err }.into())
+                })
+                .into_iter()
+                .collect::<Result<_, _>>()
+        })
+        .map(|results: Vec<AttendeesResponse>| {
+            results
+                .into_iter()
+                .flat_map(|response| response.attendees)
+                .map(|attendee| attendee.profile)
+                .collect()
+        })
+        .map_err(|err| {
+            EventbriteError::AttendeesLoadError {
+                event_id: String::from(event_id),
+                cause: err,
+            }
+            .into()
+        })
 }
 
 pub fn load_attendees(event_id: &str, token: &str) -> Result<Vec<Profile>, Error> {
     fetch_all_attendees(fetch_attendees_page, event_id, token)
-}
-
-/// Traverse a Vec<Result<T, Error>> and combine the values to return a Result<Vec<T>, Error>
-///
-/// If all values of the vector are Ok then return a Ok containing all the values cloned
-/// On the first Err it stop accumulating values and return the matched error
-///
-/// T must be a Clone type
-fn sequence<T>(seq: Vec<Result<T, Error>>) -> Result<Vec<T>, Error>
-    where T: Clone {
-    let result = seq.into_iter().fold(Ok(vec![]), |result, current|
-        result.and_then(|mut vec|
-            match current {
-                Ok(value) => {
-                    vec.push(value.clone());
-                    Ok(vec)
-                }
-                Err(e) => Err(e)
-            }));
-    result
 }
 
 #[cfg(test)]
@@ -191,29 +186,6 @@ mod tests {
         let actual = fetch_first_event(fetch, "412451CDS", "5O5ICDI5I4LUFCAZRSTX");
         assert!(actual.is_ok());
         assert_eq!(actual.unwrap(), Event { id: "51124390432".to_string() });
-    }
-
-    #[test]
-    fn test_sequence() {
-        let actual = sequence(vec![Ok(0), Ok(1), Ok(2)]);
-        assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), vec![0, 1, 2]);
-
-        let actual = sequence(vec![Ok(0), Ok(1), Err(EventbriteTestError::TestError { page: 2 }.into())]);
-        assert!(actual.is_err());
-        assert_eq!(actual.unwrap_err().downcast::<EventbriteTestError>().unwrap(), EventbriteTestError::TestError { page: 2 });
-
-        let actual = sequence(vec![Ok(0), Err(EventbriteTestError::TestError { page: 1 }.into()), Ok(2)]);
-        assert!(actual.is_err());
-        assert_eq!(actual.unwrap_err().downcast::<EventbriteTestError>().unwrap(), EventbriteTestError::TestError { page: 1 });
-
-        let actual = sequence(vec![Err(EventbriteTestError::TestError { page: 0 }.into()), Ok(1), Ok(2)]);
-        assert!(actual.is_err());
-        assert_eq!(actual.unwrap_err().downcast::<EventbriteTestError>().unwrap(), EventbriteTestError::TestError { page: 0 });
-
-        let actual = sequence(vec![Err(EventbriteTestError::TestError { page: 0 }.into()), Err(EventbriteTestError::TestError { page: 1 }.into()), Ok(2)]);
-        assert!(actual.is_err());
-        assert_eq!(actual.unwrap_err().downcast::<EventbriteTestError>().unwrap(), EventbriteTestError::TestError { page: 0 });
     }
 
     #[test]
