@@ -1,6 +1,0 @@
-CREATE TABLE winners (
-  id VARCHAR NOT NULL PRIMARY KEY,
-  first_name VARCHAR NOT NULL,
-  last_name VARCHAR NOT NULL,
-  event_id VARCHAR NOT NULL
-)
