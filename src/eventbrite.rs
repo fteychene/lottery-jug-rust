@@ -1,6 +1,5 @@
 use anyhow::{Error, anyhow, Context};
 use serde::{Deserialize, Serialize};
-use futures::stream::{self, StreamExt};
 
 const EVENTBRITE_BASE_URL: &'static str = "https://www.eventbriteapi.com";
 
