@@ -1,6 +1,7 @@
 use anyhow::{Error, anyhow, Context};
 use serde::{Deserialize, Serialize};
 
+
 const EVENTBRITE_BASE_URL: &'static str = "https://www.eventbriteapi.com";
 
 #[derive(Deserialize, Debug, Clone)]
@@ -61,28 +62,22 @@ fn attendees_url(event_id: &str, token: &str, page_id: u8) -> String {
 }
 
 async fn fetch_attendees_page(event_id: &str, token: &str, page_id: u8) -> Result<AttendeesResponse, Error> {
-    reqwest::get(&attendees_url(event_id, token, page_id)).await?
+    println!("Start {}", page_id);
+    let result = reqwest::get(&attendees_url(event_id, token, page_id)).await?
         .error_for_status()?
         .json::<AttendeesResponse>().await
-        .context(format!("Error calling eventbrite for attendees for page {}", page_id))
+        .context(format!("Error calling eventbrite for attendees for page {}", page_id));
+    println!("End {}", page_id);
+    return result;
 }
 
-// TODO : Improve code
 pub async fn load_attendees(event_id: &str, token: &str) -> Result<Vec<Profile>, Error> {
     let attendees = fetch_attendees_page(event_id, token, 1).await?;
-    let pagination_responses =
-        futures::future::join_all((attendees.pagination.page_number..attendees.pagination.page_count)
-            .map(|page| fetch_attendees_page(event_id, token, page + 1)) // Page + 1 because Eventbrite seems to think that 0 == 1. LOL
-            .collect::<Vec<_>>()).await;
-    // stream::iter(response.pagination.page_number..response.pagination.page_count)
-    //     .then(|page| fetch_attendees_page(event_id, token, page))
-    //     .collect::<Vec<Result<AttendeesResponse, Error>>>()
-    //     .await;
-
-    let result =
-        Iterator::chain(vec![Ok(attendees)].into_iter(), pagination_responses)
-            .collect::<Result<Vec<AttendeesResponse>, Error>>()?; // sequence Vec<Result<_>> => Result<Vec<_>>
-    Ok(result.into_iter()
+    let mut paginating = futures::future::join_all(
+        (attendees.pagination.page_number..attendees.pagination.page_count).map(|page| fetch_attendees_page(event_id, token, page + 1))).await // Page + 1 because Eventbrite seems to think that 0 == 1. LOL
+        .into_iter().collect::<Result<Vec<AttendeesResponse>, Error>>()?; // Vec<Result<T, E>> => Result<Vec<T>, E> sequence as collect :heart_eyes:
+    paginating.insert(0, attendees);
+    Ok(paginating.into_iter()
         .flat_map(|response| response.attendees)
         .map(|attendee| attendee.profile)
         .collect())

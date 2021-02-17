@@ -1,15 +1,15 @@
-use anyhow::{Error, Context, anyhow};
+use anyhow::{Error, anyhow};
 use std::env;
 use crate::eventbrite::{first_event, Profile};
-use warp::{Filter, http};
+use warp::Filter;
 use std::convert::Infallible;
-use std::sync::{Arc, Mutex, RwLock};
-use serde::{Deserialize, Serialize};
+use std::sync::{Arc, RwLock};
+use serde::{Deserialize};
 use warp::reply::{Json, WithStatus};
-use reqwest::StatusCode;
-use std::time::{Instant, Duration};
+use std::time::Duration;
 use tokio_stream::wrappers::IntervalStream;
 use futures::StreamExt;
+use std::net::SocketAddr;
 
 mod eventbrite;
 mod lottery;
@@ -49,11 +49,7 @@ async fn winners(query: WinnerQuery, cache: Arc<RwLock<Option<Vec<Profile>>>>) -
         .unwrap_or_else(|error| as_error_reply(error)))
 }
 
-// TODO How ? WTF It's amazing but how ... Extract=(Env, ) Oo Oo Oo
-fn with_env(env: Env) -> impl Filter<Extract=(Env, ), Error=std::convert::Infallible> + Clone {
-    warp::any().map(move || env.clone())
-}
-
+// TODO How ? WTF It's amazing but how ... Extract=(X, ) Oo Oo Oo
 fn with_cache(cache: Arc<RwLock<Option<Vec<Profile>>>>) -> impl Filter<Extract=(Arc<RwLock<Option<Vec<Profile>>>>, ), Error=std::convert::Infallible> + Clone {
     warp::any().map(move || cache.clone())
 }
@@ -62,6 +58,10 @@ fn with_cache(cache: Arc<RwLock<Option<Vec<Profile>>>>) -> impl Filter<Extract=(
 async fn main() -> Result<(), Error> {
     let organizer = env::var("ORGANIZER_TOKEN").expect("ORGANIZER_TOKEN is mandatory");
     let token = env::var("EVENTBRITE_TOKEN").expect("EVENTBRITE_TOKEN is mandatory");
+    let http_bind = env::var("HTTP_BIND").unwrap_or("0.0.0.0".to_string());
+    let http_port = env::var("HTTP_PORT").unwrap_or("8088".to_string());
+    let server_addr: SocketAddr = format!("{}:{}", http_bind, http_port).parse().expect("HTTP_BIND and HTTP_PORT doesn't define a valid socket address");
+
     let cache = Arc::new(RwLock::new(None));
 
     let write_cache = cache.clone();
@@ -91,7 +91,7 @@ async fn main() -> Result<(), Error> {
         .and_then(winners);
 
     warp::serve(winners.or(hello))
-        .run(([127, 0, 0, 1], 8080))
+        .run(server_addr)
         .await;
     Ok(())
 }
