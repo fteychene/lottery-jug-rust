@@ -62,13 +62,10 @@ fn attendees_url(event_id: &str, token: &str, page_id: u8) -> String {
 }
 
 async fn fetch_attendees_page(event_id: &str, token: &str, page_id: u8) -> Result<AttendeesResponse, Error> {
-    println!("Start {}", page_id);
-    let result = reqwest::get(&attendees_url(event_id, token, page_id)).await?
+    reqwest::get(&attendees_url(event_id, token, page_id)).await?
         .error_for_status()?
         .json::<AttendeesResponse>().await
-        .context(format!("Error calling eventbrite for attendees for page {}", page_id));
-    println!("End {}", page_id);
-    return result;
+        .context(format!("Error calling eventbrite for attendees for page {}", page_id))
 }
 
 pub async fn load_attendees(event_id: &str, token: &str) -> Result<Vec<Profile>, Error> {
