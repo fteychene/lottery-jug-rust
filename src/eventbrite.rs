@@ -1,6 +1,6 @@
-use anyhow::{Error, anyhow, Context};
+use anyhow::{Context, Error};
 use serde::{Deserialize, Serialize};
-
+use thiserror::Error;
 
 const EVENTBRITE_BASE_URL: &'static str = "https://www.eventbriteapi.com";
 
@@ -40,6 +40,18 @@ pub struct EventsResponse {
     pub events: Vec<Event>
 }
 
+#[derive(Debug, Error)]
+pub enum EventbriteError {
+    #[error("Error while loading attendees for event {}", event_id)]
+    AttendeesLoadError {
+        event_id: String,
+        #[source] cause: Error,
+    },
+    #[error("No event available on eventbrite")]
+    NoEventAvailable,
+}
+
+
 fn events_url(organizer: &str, token: &str) -> String {
     format!("{base_url}/v3/organizations/{organizer}/events/?status=live&order_by=start_desc&token={token}", base_url = EVENTBRITE_BASE_URL, organizer = organizer, token = token)
 }
@@ -51,9 +63,8 @@ pub async fn load_events(organizer: &str, token: &str) -> Result<EventsResponse,
     Ok(events)
 }
 
-pub fn first_event(events: Vec<Event>) -> Result<Event, Error> {
+pub fn first_event(events: Vec<Event>) -> Option<Event> {
     events.first()
-        .ok_or(anyhow!("No event available currently"))
         .map(|e| e.clone())
 }
 
@@ -69,10 +80,12 @@ async fn fetch_attendees_page(event_id: &str, token: &str, page_id: u8) -> Resul
 }
 
 pub async fn load_attendees(event_id: &str, token: &str) -> Result<Vec<Profile>, Error> {
-    let attendees = fetch_attendees_page(event_id, token, 1).await?;
+    let attendees = fetch_attendees_page(event_id, token, 1).await
+        .map_err(|e| EventbriteError::AttendeesLoadError{event_id: event_id.to_string(), cause: e})?;
     let mut paginating = futures::future::join_all(
         (attendees.pagination.page_number..attendees.pagination.page_count).map(|page| fetch_attendees_page(event_id, token, page + 1))).await // Page + 1 because Eventbrite seems to think that 0 == 1. LOL
-        .into_iter().collect::<Result<Vec<AttendeesResponse>, Error>>()?; // Vec<Result<T, E>> => Result<Vec<T>, E> sequence as collect :heart_eyes:
+        .into_iter().collect::<Result<Vec<AttendeesResponse>, Error>>()
+        .map_err(|e| EventbriteError::AttendeesLoadError{event_id: event_id.to_string(), cause: e})?; // Vec<Result<T, E>> => Result<Vec<T>, E> sequence as collect :heart_eyes:
     paginating.insert(0, attendees);
     Ok(paginating.into_iter()
         .flat_map(|response| response.attendees)

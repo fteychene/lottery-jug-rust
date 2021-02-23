@@ -6,7 +6,7 @@ use rand::seq::SliceRandom;
 use std::convert::TryFrom;
 
 #[derive(Debug, Error, PartialEq)]
-enum DrawError {
+pub enum DrawError {
     #[error("Invalid draw request (asked : {asked})")]
     InvalidDrawRequest {
         asked: i8
